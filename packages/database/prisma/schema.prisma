@@ -1,0 +1,479 @@
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pgvector(map: "vector"), uuidOssp(map: "uuid-ossp")]
+}
+
+// ─── Workspaces & Auth ────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id  // Clerk user ID
+  email     String   @unique
+  name      String
+  avatarUrl String?  @map("avatar_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  memberships WorkspaceMember[]
+
+  @@map("users")
+}
+
+model Workspace {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name      String   @db.VarChar(100)
+  slug      String   @unique @db.VarChar(50)
+  logoUrl   String?  @map("logo_url")
+  plan      PlanName @default(free)
+  aiModel   String   @default("anthropic/claude-sonnet-4-6") @map("ai_model")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  members          WorkspaceMember[]
+  channels         Channel[]
+  contacts         Contact[]
+  flows            Flow[]
+  conversations    Conversation[]
+  broadcasts       Broadcast[]
+  knowledgeBase    KnowledgeBaseItem[]
+  segments         Segment[]
+  aiUsageLogs      AiUsageLog[]
+  subscription     Subscription?
+  apiKeys          ApiKey[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  userId      String     @map("user_id")
+  role        MemberRole @default(agent)
+  email       String
+  name        String
+  avatarUrl   String?    @map("avatar_url")
+  invitedAt   DateTime   @default(now()) @map("invited_at")
+  acceptedAt  DateTime?  @map("accepted_at")
+
+  workspace         Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user              User?          @relation(fields: [userId], references: [id])
+  assignedConversations Conversation[] @relation("AssignedAgent")
+
+  @@unique([workspaceId, userId])
+  @@map("workspace_members")
+}
+
+// ─── Channels ─────────────────────────────────────────────────────────────────
+
+model Channel {
+  id            String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  workspaceId   String      @map("workspace_id") @db.Uuid
+  type          ChannelType
+  name          String      @db.VarChar(100)
+  credentials   Json        @default("{}")
+  webhookSecret String?     @map("webhook_secret")
+  isActive      Boolean     @default(true) @map("is_active")
+  widgetConfig  Json        @default("{}") @map("widget_config")
+  createdAt     DateTime    @default(now()) @map("created_at")
+
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  conversations Conversation[]
+  broadcastChannels BroadcastChannel[]
+
+  @@map("channels")
+}
+
+// ─── Contacts ─────────────────────────────────────────────────────────────────
+
+model Contact {
+  id           String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  workspaceId  String      @map("workspace_id") @db.Uuid
+  externalId   String?     @map("external_id")
+  channelType  ChannelType? @map("channel_type")
+  email        String?
+  phone        String?
+  firstName    String?     @map("first_name")
+  lastName     String?     @map("last_name")
+  avatarUrl    String?     @map("avatar_url")
+  locale       String?
+  timezone     String?
+  customFields Json        @default("{}") @map("custom_fields")
+  subscribedAt DateTime    @default(now()) @map("subscribed_at")
+  lastSeenAt   DateTime?   @map("last_seen_at")
+  isSubscribed Boolean     @default(true) @map("is_subscribed")
+
+  workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  tags           ContactTag[]
+  conversations  Conversation[]
+  flowExecutions FlowExecution[]
+  broadcastRecipients BroadcastRecipient[]
+
+  @@unique([workspaceId, externalId, channelType])
+  @@map("contacts")
+}
+
+model ContactTag {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  contactId String   @map("contact_id") @db.Uuid
+  tag       String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  contact Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  @@unique([contactId, tag])
+  @@map("contact_tags")
+}
+
+model Segment {
+  id           String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  workspaceId  String      @map("workspace_id") @db.Uuid
+  name         String      @db.VarChar(200)
+  segmentType  SegmentType @default(dynamic) @map("segment_type")
+  rules        Json        @default("[]")
+  createdAt    DateTime    @default(now()) @map("created_at")
+
+  workspace  Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  broadcasts Broadcast[]
+
+  @@map("segments")
+}
+
+// ─── Flows ────────────────────────────────────────────────────────────────────
+
+model Flow {
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  name        String   @db.VarChar(200)
+  description String?
+  isPublished Boolean  @default(false) @map("is_published")
+  nodes       Json     @default("[]")
+  edges       Json     @default("[]")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace       Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  versions        FlowVersion[]
+  triggers        FlowTrigger[]
+  executions      FlowExecution[]
+
+  @@map("flows")
+}
+
+model FlowVersion {
+  id        String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  flowId    String   @map("flow_id") @db.Uuid
+  version   Int
+  nodes     Json
+  edges     Json
+  createdAt DateTime @default(now()) @map("created_at")
+
+  flow Flow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@unique([flowId, version])
+  @@map("flow_versions")
+}
+
+model FlowTrigger {
+  id          String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  flowId      String      @map("flow_id") @db.Uuid
+  triggerType TriggerType @map("trigger_type")
+  channelType ChannelType? @map("channel_type")
+  keyword     String?
+  isActive    Boolean     @default(true) @map("is_active")
+
+  flow Flow @relation(fields: [flowId], references: [id], onDelete: Cascade)
+
+  @@map("flow_triggers")
+}
+
+model FlowExecution {
+  id            String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  flowId        String              @map("flow_id") @db.Uuid
+  contactId     String              @map("contact_id") @db.Uuid
+  currentNodeId String?             @map("current_node_id")
+  status        FlowExecutionStatus @default(running)
+  context       Json                @default("{}")
+  startedAt     DateTime            @default(now()) @map("started_at")
+  completedAt   DateTime?           @map("completed_at")
+
+  flow    Flow    @relation(fields: [flowId], references: [id])
+  contact Contact @relation(fields: [contactId], references: [id])
+  activeConversation Conversation? @relation("ActiveFlowExecution")
+
+  @@map("flow_executions")
+}
+
+// ─── Conversations & Messages ─────────────────────────────────────────────────
+
+model Conversation {
+  id                   String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  workspaceId          String             @map("workspace_id") @db.Uuid
+  contactId            String             @map("contact_id") @db.Uuid
+  channelId            String             @map("channel_id") @db.Uuid
+  status               ConversationStatus @default(open)
+  assignedAgentId      String?            @map("assigned_agent_id") @db.Uuid
+  activeFlowExecutionId String?           @unique @map("active_flow_execution_id") @db.Uuid
+  unreadCount          Int                @default(0) @map("unread_count")
+  lastMessageAt        DateTime?          @map("last_message_at")
+  snoozedUntil         DateTime?          @map("snoozed_until")
+  createdAt            DateTime           @default(now()) @map("created_at")
+
+  workspace           Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contact             Contact        @relation(fields: [contactId], references: [id])
+  channel             Channel        @relation(fields: [channelId], references: [id])
+  assignedAgent       WorkspaceMember? @relation("AssignedAgent", fields: [assignedAgentId], references: [id])
+  activeFlowExecution FlowExecution?  @relation("ActiveFlowExecution", fields: [activeFlowExecutionId], references: [id])
+  messages            Message[]
+
+  @@map("conversations")
+}
+
+model Message {
+  id             String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  conversationId String           @map("conversation_id") @db.Uuid
+  direction      MessageDirection
+  content        Json
+  status         MessageStatus    @default(sent)
+  sentiment      Sentiment?
+  externalId     String?          @map("external_id")
+  agentId        String?          @map("agent_id")
+  sentAt         DateTime         @default(now()) @map("sent_at")
+  deliveredAt    DateTime?        @map("delivered_at")
+  readAt         DateTime?        @map("read_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@map("messages")
+}
+
+// ─── Broadcasting ─────────────────────────────────────────────────────────────
+
+model Broadcast {
+  id            String          @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  workspaceId   String          @map("workspace_id") @db.Uuid
+  name          String          @db.VarChar(200)
+  status        BroadcastStatus @default(draft)
+  audienceType  AudienceType    @map("audience_type")
+  segmentId     String?         @map("segment_id") @db.Uuid
+  audienceTag   String?         @map("audience_tag")
+  content       Json
+  scheduledAt   DateTime?       @map("scheduled_at")
+  sentAt        DateTime?       @map("sent_at")
+  statsTotal    Int             @default(0) @map("stats_total")
+  statsSent     Int             @default(0) @map("stats_sent")
+  statsDelivered Int            @default(0) @map("stats_delivered")
+  statsRead     Int             @default(0) @map("stats_read")
+  statsFailed   Int             @default(0) @map("stats_failed")
+  createdAt     DateTime        @default(now()) @map("created_at")
+
+  workspace  Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  segment    Segment?            @relation(fields: [segmentId], references: [id])
+  channels   BroadcastChannel[]
+  recipients BroadcastRecipient[]
+
+  @@map("broadcasts")
+}
+
+model BroadcastChannel {
+  broadcastId String @map("broadcast_id") @db.Uuid
+  channelId   String @map("channel_id") @db.Uuid
+
+  broadcast Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  channel   Channel   @relation(fields: [channelId], references: [id])
+
+  @@id([broadcastId, channelId])
+  @@map("broadcast_channels")
+}
+
+model BroadcastRecipient {
+  id          String           @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  broadcastId String           @map("broadcast_id") @db.Uuid
+  contactId   String           @map("contact_id") @db.Uuid
+  status      RecipientStatus  @default(queued)
+  sentAt      DateTime?        @map("sent_at")
+  deliveredAt DateTime?        @map("delivered_at")
+  readAt      DateTime?        @map("read_at")
+  failReason  String?          @map("fail_reason")
+
+  broadcast Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  contact   Contact   @relation(fields: [contactId], references: [id])
+
+  @@map("broadcast_recipients")
+}
+
+// ─── Knowledge Base & AI ──────────────────────────────────────────────────────
+
+model KnowledgeBaseItem {
+  id          String     @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  title       String     @db.VarChar(300)
+  content     String     @db.Text
+  sourceUrl   String?    @map("source_url")
+  sourceType  SourceType @map("source_type")
+  embedding   Unsupported("vector(1536)")?
+  createdAt   DateTime   @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("knowledge_base_items")
+}
+
+model AiUsageLog {
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  model       String
+  promptTokens Int     @map("prompt_tokens")
+  completionTokens Int @map("completion_tokens")
+  feature     String
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("ai_usage_logs")
+}
+
+// ─── Billing ──────────────────────────────────────────────────────────────────
+
+model Subscription {
+  id                   String             @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  workspaceId          String             @unique @map("workspace_id") @db.Uuid
+  stripeCustomerId     String             @map("stripe_customer_id")
+  stripeSubscriptionId String?            @map("stripe_subscription_id")
+  plan                 PlanName           @default(free)
+  status               SubscriptionStatus @default(active)
+  currentPeriodEnd     DateTime?          @map("current_period_end")
+  cancelAtPeriodEnd    Boolean            @default(false) @map("cancel_at_period_end")
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("subscriptions")
+}
+
+// ─── API Keys ─────────────────────────────────────────────────────────────────
+
+model ApiKey {
+  id          String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  name        String
+  keyHash     String    @unique @map("key_hash")
+  keyPrefix   String    @map("key_prefix")
+  lastUsedAt  DateTime? @map("last_used_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum PlanName {
+  free
+  pro
+  business
+  agency
+}
+
+enum MemberRole {
+  owner
+  admin
+  agent
+}
+
+enum ChannelType {
+  web_widget
+  whatsapp
+  telegram
+  messenger
+  instagram
+}
+
+enum ConversationStatus {
+  open
+  assigned
+  resolved
+  snoozed
+}
+
+enum MessageDirection {
+  inbound
+  outbound
+}
+
+enum MessageStatus {
+  sent
+  delivered
+  read
+  failed
+}
+
+enum Sentiment {
+  positive
+  neutral
+  negative
+  urgent
+}
+
+enum BroadcastStatus {
+  draft
+  scheduled
+  sending
+  sent
+  failed
+}
+
+enum RecipientStatus {
+  queued
+  sent
+  delivered
+  read
+  failed
+}
+
+enum AudienceType {
+  segment
+  tag
+  all
+}
+
+enum SegmentType {
+  dynamic
+  static
+}
+
+enum TriggerType {
+  keyword
+  opt_in
+  button_click
+  webhook
+  first_message
+}
+
+enum FlowExecutionStatus {
+  running
+  waiting_input
+  completed
+  failed
+  paused
+}
+
+enum SourceType {
+  manual
+  pdf
+  url
+  youtube
+}
+
+enum SubscriptionStatus {
+  active
+  past_due
+  canceled
+  trialing
+}

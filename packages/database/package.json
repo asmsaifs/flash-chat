@@ -1,0 +1,23 @@
+{
+  "name": "@flashchat/database",
+  "version": "0.0.1",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "db:generate": "node --env-file=../../apps/api/.env node_modules/prisma/build/index.js generate --schema=./prisma/schema.prisma",
+    "db:migrate": "node --env-file=../../apps/api/.env node_modules/prisma/build/index.js migrate dev --schema=./prisma/schema.prisma",
+    "db:reset": "node --env-file=../../apps/api/.env node_modules/prisma/build/index.js migrate reset --schema=./prisma/schema.prisma",
+    "db:seed": "node --env-file=../../apps/api/.env node_modules/tsx/dist/cli.mjs src/seed.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.1.0"
+  },
+  "devDependencies": {
+    "prisma": "^6.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
