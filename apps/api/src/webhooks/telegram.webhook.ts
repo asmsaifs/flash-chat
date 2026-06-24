@@ -83,8 +83,12 @@ export async function telegramWebhookHandler(app: FastifyInstance) {
         const trigger = await prisma.flowTrigger.findFirst({
           where: {
             flow: { workspaceId: channel.workspaceId, isPublished: true },
-            channelType: 'telegram',
-            OR: [{ triggerType: 'first_message', keyword: null }, { triggerType: 'keyword', keyword: text.toLowerCase().trim() }],
+            OR: [
+              { channelType: 'telegram', triggerType: 'first_message' },
+              { channelType: 'telegram', triggerType: 'keyword', keyword: text.toLowerCase().trim() },
+              { channelType: null, triggerType: 'first_message' },
+              { channelType: null, triggerType: 'keyword', keyword: text.toLowerCase().trim() },
+            ],
           },
           include: { flow: true },
         })

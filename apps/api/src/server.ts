@@ -25,6 +25,7 @@ import { clerkWebhookHandler } from './webhooks/clerk.webhook.js'
 
 // Workers
 import { startBroadcastWorker } from './workers/broadcast.worker.js'
+import { startFlowExecutionWorker } from './workers/flow-execution.worker.js'
 
 const PORT = Number(process.env.PORT ?? 4000)
 const HOST = process.env.HOST ?? '0.0.0.0'
@@ -123,6 +124,7 @@ async function bootstrap() {
 
   // Start workers
   startBroadcastWorker()
+  startFlowExecutionWorker()
 
   await app.listen({ port: PORT, host: HOST })
   console.log(`[API] running at http://${HOST}:${PORT}`)

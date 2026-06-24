@@ -80,8 +80,12 @@ export async function whatsappWebhookHandler(app: FastifyInstance) {
           const trigger = await prisma.flowTrigger.findFirst({
             where: {
               flow: { workspaceId: channel.workspaceId, isPublished: true },
-              channelType: 'whatsapp',
-              OR: [{ triggerType: 'first_message' }, { triggerType: 'keyword', keyword: text.toLowerCase().trim() }],
+              OR: [
+                { channelType: 'whatsapp', triggerType: 'first_message' },
+                { channelType: 'whatsapp', triggerType: 'keyword', keyword: text.toLowerCase().trim() },
+                { channelType: null, triggerType: 'first_message' },
+                { channelType: null, triggerType: 'keyword', keyword: text.toLowerCase().trim() },
+              ],
             },
           })
           if (trigger) {

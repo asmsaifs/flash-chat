@@ -148,12 +148,40 @@ function TriggerEditor({ data, onUpdate }: { data: Record<string, unknown>; onUp
 
 function MessageEditor({ data, onUpdate }: { data: Record<string, unknown>; onUpdate: (d: Record<string, unknown>) => void }) {
   const content = (data.content as Record<string, unknown>) ?? { type: 'text', text: '' }
+  const type = content.type as string ?? 'text'
+
+  const replies = (content.replies as Array<{ id: string; label: string }>) ?? []
+  const buttons = (content.buttons as Array<{ id: string; label: string; url?: string }>) ?? []
+
+  const updateReplyLabel = (id: string, label: string) => {
+    onUpdate({ content: { ...content, replies: replies.map((r) => r.id === id ? { ...r, label } : r) } })
+  }
+  const addReply = () => {
+    onUpdate({ content: { ...content, replies: [...replies, { id: `r-${Date.now()}`, label: '' }] } })
+  }
+  const removeReply = (id: string) => {
+    onUpdate({ content: { ...content, replies: replies.filter((r) => r.id !== id) } })
+  }
+
+  const updateButtonLabel = (id: string, label: string) => {
+    onUpdate({ content: { ...content, buttons: buttons.map((b) => b.id === id ? { ...b, label } : b) } })
+  }
+  const updateButtonUrl = (id: string, url: string) => {
+    onUpdate({ content: { ...content, buttons: buttons.map((b) => b.id === id ? { ...b, url } : b) } })
+  }
+  const addButton = () => {
+    onUpdate({ content: { ...content, buttons: [...buttons, { id: `b-${Date.now()}`, label: '' }] } })
+  }
+  const removeButton = (id: string) => {
+    onUpdate({ content: { ...content, buttons: buttons.filter((b) => b.id !== id) } })
+  }
+
   return (
     <>
       <Field label="Message Type">
         <Select
-          value={content.type as string ?? 'text'}
-          onChange={(v) => onUpdate({ content: { ...content, type: v } })}
+          value={type}
+          onChange={(v) => onUpdate({ content: { type: v, text: content.text ?? '' } })}
           options={[
             { value: 'text', label: 'Text' },
             { value: 'image', label: 'Image' },
@@ -162,15 +190,65 @@ function MessageEditor({ data, onUpdate }: { data: Record<string, unknown>; onUp
           ]}
         />
       </Field>
-      <Field label="Text">
-        <textarea
-          value={content.text as string ?? ''}
-          onChange={(e) => onUpdate({ content: { ...content, text: e.target.value } })}
-          placeholder="Type your message… Use {{first_name}} for variables"
-          rows={4}
-          className="w-full text-sm border rounded-md px-3 py-2 bg-background outline-none focus:ring-2 focus:ring-ring resize-none"
-        />
-      </Field>
+      {type === 'image' ? (
+        <Field label="Image URL">
+          <Input value={content.url as string ?? ''} onChange={(v) => onUpdate({ content: { ...content, url: v } })} placeholder="https://example.com/image.png" />
+        </Field>
+      ) : (
+        <Field label="Text">
+          <textarea
+            value={content.text as string ?? ''}
+            onChange={(e) => onUpdate({ content: { ...content, text: e.target.value } })}
+            placeholder="Type your message… Use {{first_name}} for variables"
+            rows={4}
+            className="w-full text-sm border rounded-md px-3 py-2 bg-background outline-none focus:ring-2 focus:ring-ring resize-none"
+          />
+        </Field>
+      )}
+      {type === 'quick_replies' && (
+        <Field label="Quick Replies">
+          <div className="space-y-2">
+            {replies.map((r) => (
+              <div key={r.id} className="flex gap-2 items-center">
+                <input
+                  value={r.label}
+                  onChange={(e) => updateReplyLabel(r.id, e.target.value)}
+                  placeholder="Reply label"
+                  className="flex-1 text-sm border rounded-md px-2 py-1.5 bg-background outline-none focus:ring-2 focus:ring-ring"
+                />
+                <button type="button" onClick={() => removeReply(r.id)} className="text-muted-foreground hover:text-destructive p-1">✕</button>
+              </div>
+            ))}
+            <button type="button" onClick={addReply} className="text-xs text-primary hover:underline">+ Add Reply</button>
+          </div>
+        </Field>
+      )}
+      {type === 'buttons' && (
+        <Field label="Buttons">
+          <div className="space-y-3">
+            {buttons.map((b) => (
+              <div key={b.id} className="space-y-1.5 border rounded-md p-2">
+                <div className="flex gap-2 items-center">
+                  <input
+                    value={b.label}
+                    onChange={(e) => updateButtonLabel(b.id, e.target.value)}
+                    placeholder="Button label"
+                    className="flex-1 text-sm border rounded-md px-2 py-1.5 bg-background outline-none focus:ring-2 focus:ring-ring"
+                  />
+                  <button type="button" onClick={() => removeButton(b.id)} className="text-muted-foreground hover:text-destructive p-1">✕</button>
+                </div>
+                <input
+                  value={b.url ?? ''}
+                  onChange={(e) => updateButtonUrl(b.id, e.target.value)}
+                  placeholder="URL (optional)"
+                  className="w-full text-sm border rounded-md px-2 py-1.5 bg-background outline-none focus:ring-2 focus:ring-ring"
+                />
+              </div>
+            ))}
+            <button type="button" onClick={addButton} className="text-xs text-primary hover:underline">+ Add Button</button>
+          </div>
+        </Field>
+      )}
     </>
   )
 }

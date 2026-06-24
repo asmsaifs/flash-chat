@@ -5,6 +5,8 @@ import { useApi } from '@/lib/api'
 import { useWorkspace } from '@/hooks/use-workspace'
 import { StatsCard } from '@/components/analytics/stats-card'
 import { SubscriberGrowthChart } from '@/components/analytics/subscriber-growth-chart'
+import { MessageVolumeChart } from '@/components/analytics/message-volume-chart'
+import { ChannelBreakdownChart } from '@/components/analytics/channel-breakdown-chart'
 import { BarChart3, MessageSquare, Users, Send, Zap } from 'lucide-react'
 
 export default function AnalyticsPage() {
@@ -53,7 +55,12 @@ export default function AnalyticsPage() {
         </div>
       </div>
 
-      <SubscriberGrowthChart workspaceId={workspaceId} />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <SubscriberGrowthChart workspaceId={workspaceId} />
+        <MessageVolumeChart workspaceId={workspaceId} />
+      </div>
+
+      <ChannelBreakdownChart workspaceId={workspaceId} />
     </div>
   )
 }

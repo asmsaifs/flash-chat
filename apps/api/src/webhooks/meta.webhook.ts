@@ -79,8 +79,12 @@ export async function metaWebhookHandler(app: FastifyInstance) {
             const trigger = await prisma.flowTrigger.findFirst({
               where: {
                 flow: { workspaceId: channel.workspaceId, isPublished: true },
-                channelType: channel.type as ChannelType,
-                OR: [{ triggerType: 'first_message' }, { triggerType: 'keyword', keyword: text.toLowerCase().trim() }],
+                OR: [
+                  { channelType: channel.type as ChannelType, triggerType: 'first_message' },
+                  { channelType: channel.type as ChannelType, triggerType: 'keyword', keyword: text.toLowerCase().trim() },
+                  { channelType: null, triggerType: 'first_message' },
+                  { channelType: null, triggerType: 'keyword', keyword: text.toLowerCase().trim() },
+                ],
               },
             })
             if (trigger) {

@@ -83,4 +83,48 @@ export async function analyticsRoutes(app: FastifyInstance) {
       })
     }
   )
+
+  app.get<{ Params: { workspaceId: string }; Querystring: { period?: string } }>(
+    '/workspaces/:workspaceId/analytics/message-volume',
+    { preHandler },
+    async (req, reply) => {
+      const days = Number(req.query.period ?? 30)
+      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000)
+
+      const messages = await prisma.message.findMany({
+        where: { conversation: { workspaceId: req.workspaceId }, sentAt: { gte: since } },
+        select: { sentAt: true, direction: true },
+        orderBy: { sentAt: 'asc' },
+      })
+
+      const byDay: Record<string, { inbound: number; outbound: number }> = {}
+      for (const m of messages) {
+        const day = m.sentAt.toISOString().split('T')[0]
+        if (!byDay[day]) byDay[day] = { inbound: 0, outbound: 0 }
+        byDay[day][m.direction as 'inbound' | 'outbound']++
+      }
+
+      const series = Object.entries(byDay).map(([date, counts]) => ({ date, ...counts }))
+      return reply.send({ data: series })
+    }
+  )
+
+  app.get<{ Params: { workspaceId: string } }>(
+    '/workspaces/:workspaceId/analytics/channel-breakdown',
+    { preHandler },
+    async (req, reply) => {
+      const contacts = await prisma.contact.groupBy({
+        by: ['channelType'],
+        where: { workspaceId: req.workspaceId },
+        _count: { id: true },
+      })
+
+      const data = contacts.map((c) => ({
+        channel: c.channelType,
+        contacts: c._count.id,
+      }))
+
+      return reply.send({ data })
+    }
+  )
 }
