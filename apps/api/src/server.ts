@@ -3,7 +3,7 @@ import cors from '@fastify/cors'
 import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
 import { Server as SocketServer } from 'socket.io'
-import { setSocketIo } from './lib/socket.js'
+import { setSocketIo, setWidgetNamespace } from './lib/socket.js'
 import { redis } from './lib/redis.js'
 
 // Routes
@@ -38,7 +38,24 @@ async function bootstrap() {
   })
   setSocketIo(io)
 
-  // Socket.io authentication + rooms
+  // /widget namespace — auth via Redis visitorToken
+  const widgetNs = io.of('/widget')
+  setWidgetNamespace(widgetNs)
+
+  widgetNs.use(async (socket, next) => {
+    const { visitorToken, conversationId } = socket.handshake.auth as { visitorToken?: string; conversationId?: string }
+    if (!visitorToken || !conversationId) return next(new Error('Unauthorized'))
+    const stored = await redis.get(`widget:token:${visitorToken}`)
+    if (stored !== conversationId) return next(new Error('Unauthorized'))
+    socket.data.conversationId = conversationId
+    next()
+  })
+
+  widgetNs.on('connection', (socket) => {
+    socket.join(`conversation:${socket.data.conversationId as string}`)
+  })
+
+  // Dashboard socket.io — auth via Clerk token + rooms
   io.use(async (socket, next) => {
     const token = socket.handshake.auth.token as string | undefined
     const workspaceId = socket.handshake.auth.workspaceId as string | undefined

@@ -50,6 +50,7 @@ export interface Contact {
   avatarUrl: string | null
   locale: string | null
   timezone: string | null
+  isSubscribed: boolean
   tags: string[]
   customFields: Record<string, unknown>
   subscribedAt: Date

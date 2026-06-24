@@ -3,7 +3,7 @@ import type { FlowExecution, Conversation, Contact, Workspace } from '@flashchat
 import type { FlowNode, FlowEdge, MessageContent } from '@flashchat/shared'
 import { generateAiReply, analyzeSentiment } from './ai.service.js'
 import { sendChannelMessage } from './channel.service.js'
-import { emitToWorkspace } from '../lib/socket.js'
+import { emitToWorkspace, emitToWidgetConversation } from '../lib/socket.js'
 
 interface ExecutionContext {
   execution: FlowExecution
@@ -151,7 +151,7 @@ async function processNode(executionId: string, conversationId: string, nodeId: 
 
 async function handleMessageNode(ctx: ExecutionContext, executionId: string, conversationId: string, node: FlowNode) {
   const data = node.data as { content: MessageContent }
-  await sendChannelMessage(ctx.conversation.channelId, ctx.contact, data.content)
+  await sendChannelMessage(ctx.conversation.channelId, ctx.contact, data.content, conversationId)
   await saveOutboundMessage(conversationId, data.content)
   await goToNext(ctx, executionId, conversationId, node.id)
 }
@@ -190,7 +190,7 @@ async function handleConditionNode(ctx: ExecutionContext, executionId: string, c
 
 async function handleUserInputNode(ctx: ExecutionContext, executionId: string, conversationId: string, node: FlowNode) {
   const data = node.data as { prompt: MessageContent; captureField?: string }
-  await sendChannelMessage(ctx.conversation.channelId, ctx.contact, data.prompt)
+  await sendChannelMessage(ctx.conversation.channelId, ctx.contact, data.prompt, conversationId)
   await saveOutboundMessage(conversationId, data.prompt)
 
   const nextEdge = ctx.edges.find((e) => e.source === node.id)
@@ -264,7 +264,7 @@ async function handleAiReplyNode(ctx: ExecutionContext, executionId: string, con
   }
 
   const content: MessageContent = { type: 'text', text: reply }
-  await sendChannelMessage(ctx.conversation.channelId, ctx.contact, content)
+  await sendChannelMessage(ctx.conversation.channelId, ctx.contact, content, conversationId)
   await saveOutboundMessage(conversationId, content)
   await goToNext(ctx, executionId, conversationId, node.id)
 }
@@ -343,9 +343,12 @@ async function saveOutboundMessage(conversationId: string, content: MessageConte
   const conv = await prisma.conversation.update({
     where: { id: conversationId },
     data: { lastMessageAt: new Date() },
-    include: { workspace: true },
+    include: { workspace: true, channel: true },
   })
   emitToWorkspace(conv.workspaceId, 'message:new', { conversationId, message: msg })
+  if (conv.channel.type === 'web_widget') {
+    emitToWidgetConversation(conversationId, 'message:receive', { content })
+  }
 }
 
 function evaluateCondition(value: unknown, operator: string, expected: unknown): boolean {

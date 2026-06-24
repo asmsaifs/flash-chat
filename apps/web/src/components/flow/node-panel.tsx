@@ -1,24 +1,42 @@
 'use client'
 
-import { X } from 'lucide-react'
+import { Trash2, X } from 'lucide-react'
 import type { Node } from '@xyflow/react'
 
 interface Props {
   node: Node
   onUpdate: (data: Record<string, unknown>) => void
+  onDelete: (nodeId: string) => void
   onClose: () => void
 }
 
-export function NodePanel({ node, onUpdate, onClose }: Props) {
+export function NodePanel({ node, onUpdate, onDelete, onClose }: Props) {
   const data = node.data as Record<string, unknown>
 
   return (
     <div className="w-80 border-l bg-card flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <h3 className="font-semibold capitalize text-sm">{node.type?.replace('_', ' ')} Node</h3>
-        <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
-          <X className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onDelete(node.id)}
+            title="Delete node"
+            aria-label="Delete node"
+            className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded hover:bg-destructive/10"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            title="Close panel"
+            aria-label="Close panel"
+            className="text-muted-foreground hover:text-foreground p-1 rounded hover:bg-accent transition-colors"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {node.type === 'trigger' && (
@@ -76,11 +94,13 @@ function Input({ value, onChange, placeholder }: { value: string; onChange: (v: 
   )
 }
 
-function Select({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: { label: string; value: string }[] }) {
+function Select({ value, onChange, options, label }: { value: string; onChange: (v: string) => void; options: { label: string; value: string }[]; label?: string }) {
   return (
     <select
       value={value ?? ''}
       onChange={(e) => onChange(e.target.value)}
+      title={label ?? 'Select option'}
+      aria-label={label ?? 'Select option'}
       className="w-full text-sm border rounded-md px-3 py-2 bg-background outline-none focus:ring-2 focus:ring-ring"
     >
       {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -244,19 +264,22 @@ function DelayEditor({ data, onUpdate }: { data: Record<string, unknown>; onUpda
 }
 
 function UserInputEditor({ data, onUpdate }: { data: Record<string, unknown>; onUpdate: (d: Record<string, unknown>) => void }) {
+  const promptText = typeof data.prompt === 'string'
+    ? data.prompt
+    : (data.prompt as { text?: string } | undefined)?.text ?? ''
   return (
     <>
       <Field label="Prompt">
         <textarea
-          value={data.prompt as string ?? ''}
-          onChange={(e) => onUpdate({ prompt: e.target.value })}
+          value={promptText}
+          onChange={(e) => onUpdate({ prompt: { type: 'text', text: e.target.value } })}
           placeholder="e.g. What is your email address?"
           rows={3}
           className="w-full text-sm border rounded-md px-3 py-2 bg-background outline-none focus:ring-2 focus:ring-ring resize-none"
         />
       </Field>
       <Field label="Save to Variable">
-        <Input value={data.variableName as string ?? ''} onChange={(v) => onUpdate({ variableName: v })} placeholder="e.g. email" />
+        <Input value={data.captureField as string ?? ''} onChange={(v) => onUpdate({ captureField: v })} placeholder="e.g. email" />
       </Field>
       <Field label="Validation">
         <Select

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { io, type Socket } from 'socket.io-client'
 import { useAuth } from '@clerk/nextjs'
 import { useWorkspace } from './use-workspace'
@@ -10,7 +10,7 @@ let sharedSocket: Socket | null = null
 export function useSocket() {
   const { getToken } = useAuth()
   const { workspaceId } = useWorkspace()
-  const socketRef = useRef<Socket | null>(null)
+  const [socket, setSocket] = useState<Socket | null>(null)
 
   useEffect(() => {
     if (!workspaceId) return
@@ -26,25 +26,24 @@ export function useSocket() {
         })
       }
 
-      socketRef.current = sharedSocket
+      setSocket(sharedSocket)
     }
 
     connect()
-
-    return () => {
-      // Don't disconnect — reused across components
-    }
   }, [workspaceId, getToken])
 
-  return socketRef.current
+  return socket
 }
 
 export function useSocketEvent<T>(event: string, handler: (data: T) => void) {
   const socket = useSocket()
+  const handlerRef = useRef(handler)
+  handlerRef.current = handler
 
   useEffect(() => {
     if (!socket) return
-    socket.on(event, handler)
-    return () => { socket.off(event, handler) }
-  }, [socket, event, handler])
+    const cb = (data: T) => handlerRef.current(data)
+    socket.on(event, cb)
+    return () => { socket.off(event, cb) }
+  }, [socket, event])
 }

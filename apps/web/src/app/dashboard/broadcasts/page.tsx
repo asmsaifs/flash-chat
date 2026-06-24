@@ -13,7 +13,7 @@ export default function BroadcastsPage() {
   const api = useApi()
   const qc = useQueryClient()
   const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState({ name: '', text: '', audienceType: 'all', audienceValue: '' })
+  const [form, setForm] = useState({ name: '', text: '', audienceType: 'all', audienceValue: '', scheduledAt: '' })
 
   const { data: broadcastsData } = useQuery({
     queryKey: ['broadcasts', workspaceId],
@@ -37,7 +37,7 @@ export default function BroadcastsPage() {
       audienceType: form.audienceType,
       audienceValue: form.audienceValue || null,
       content: { type: 'text', text: form.text },
-      scheduledAt: null,
+      scheduledAt: form.scheduledAt || null,
     }, workspaceId),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['broadcasts', workspaceId] }); setShowForm(false) },
   })
@@ -94,6 +94,11 @@ export default function BroadcastsPage() {
               </div>
             )}
           </div>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Schedule (optional — leave blank to send immediately)</label>
+            <input type="datetime-local" value={form.scheduledAt} onChange={(e) => setForm(f => ({ ...f, scheduledAt: e.target.value }))}
+              title="Schedule send time" className="w-full border rounded-md px-3 py-2 text-sm bg-background" />
+          </div>
           <div className="flex gap-2">
             <button onClick={() => create.mutate()} disabled={create.isPending || !form.name || !form.text}
               className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
@@ -121,6 +126,9 @@ export default function BroadcastsPage() {
                 <p className="text-sm text-muted-foreground">{(b.content as { text?: string })?.text?.slice(0, 80)}…</p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {b.statsSent}/{b.statsTotal} sent · {b.statsDelivered} delivered · {b.statsRead} read
+                  {b.scheduledAt && b.status === 'scheduled' && (
+                    <span> · Scheduled {formatDate(b.scheduledAt)}</span>
+                  )}
                 </p>
               </div>
               {b.status === 'draft' && (

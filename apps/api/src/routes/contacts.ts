@@ -117,6 +117,83 @@ export async function contactRoutes(app: FastifyInstance) {
     }
   )
 
+  // List all unique tags for workspace
+  app.get<{ Params: { workspaceId: string } }>(
+    '/workspaces/:workspaceId/contacts/tags',
+    { preHandler },
+    async (req, reply) => {
+      const tags = await prisma.contactTag.findMany({
+        where: { contact: { workspaceId: req.workspaceId } },
+        select: { tag: true },
+        distinct: ['tag'],
+        orderBy: { tag: 'asc' },
+      })
+      return reply.send({ data: tags.map((t) => t.tag) })
+    }
+  )
+
+  // Bulk CSV import
+  app.post<{ Params: { workspaceId: string }; Body: { contacts: Array<{ firstName?: string; lastName?: string; email?: string; phone?: string; tags?: string[] }> } }>(
+    '/workspaces/:workspaceId/contacts/import',
+    { preHandler },
+    async (req, reply) => {
+      const rows = req.body.contacts ?? []
+      let imported = 0
+      let failed = 0
+
+      for (const row of rows) {
+        try {
+          const existing = row.email
+            ? await prisma.contact.findFirst({ where: { workspaceId: req.workspaceId, email: row.email } })
+            : row.phone
+              ? await prisma.contact.findFirst({ where: { workspaceId: req.workspaceId, phone: row.phone } })
+              : null
+
+          if (existing) {
+            await prisma.contact.update({
+              where: { id: existing.id },
+              data: {
+                firstName: row.firstName ?? existing.firstName ?? undefined,
+                lastName: row.lastName ?? existing.lastName ?? undefined,
+              },
+            })
+            if (row.tags?.length) {
+              for (const tag of row.tags) {
+                await prisma.contactTag.upsert({
+                  where: { contactId_tag: { contactId: existing.id, tag } },
+                  update: {},
+                  create: { contactId: existing.id, tag },
+                })
+              }
+            }
+          } else {
+            const contact = await prisma.contact.create({
+              data: {
+                workspaceId: req.workspaceId,
+                firstName: row.firstName,
+                lastName: row.lastName,
+                email: row.email,
+                phone: row.phone,
+                customFields: {},
+              },
+            })
+            if (row.tags?.length) {
+              await prisma.contactTag.createMany({
+                data: row.tags.map((tag) => ({ contactId: contact.id, tag })),
+                skipDuplicates: true,
+              })
+            }
+          }
+          imported++
+        } catch {
+          failed++
+        }
+      }
+
+      return reply.send({ data: { imported, failed, total: rows.length } })
+    }
+  )
+
   // Get contact activity
   app.get<{ Params: { workspaceId: string; contactId: string } }>(
     '/workspaces/:workspaceId/contacts/:contactId/activity',

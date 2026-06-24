@@ -65,21 +65,26 @@ export async function broadcastRoutes(app: FastifyInstance) {
       // Build recipient list
       const contacts = await getAudience(req.workspaceId, broadcast.audienceType, broadcast.audienceTag, broadcast.segmentId)
 
+      const isScheduled = broadcast.scheduledAt && new Date(broadcast.scheduledAt) > new Date()
       await prisma.broadcast.update({
         where: { id: broadcast.id },
-        data: { status: 'sending', statsTotal: contacts.length },
+        data: { status: isScheduled ? 'scheduled' : 'sending', statsTotal: contacts.length },
       })
 
-      // Enqueue recipients
+      const jobDelay = broadcast.scheduledAt
+        ? Math.max(0, new Date(broadcast.scheduledAt).getTime() - Date.now())
+        : 0
+
+      // Enqueue recipients (delayed if scheduled)
       await broadcastQueue.addBulk(
         contacts.map((contact) => ({
           name: 'send-to-contact',
           data: { broadcastId: broadcast.id, contactId: contact.id, workspaceId: req.workspaceId },
-          opts: { attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
+          opts: { attempts: 3, backoff: { type: 'exponential', delay: 5000 }, delay: jobDelay },
         }))
       )
 
-      return reply.send({ data: { queued: contacts.length } })
+      return reply.send({ data: { queued: contacts.length, scheduledAt: broadcast.scheduledAt } })
     }
   )
 

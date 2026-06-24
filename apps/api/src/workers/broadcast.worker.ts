@@ -1,7 +1,18 @@
 import { Worker } from 'bullmq'
 import { prisma } from '@flashchat/database'
+import type { Contact } from '@flashchat/database'
 import { sendChannelMessage } from '../services/channel.service.js'
 import { redis } from '../lib/redis.js'
+
+function resolveTemplate(text: string, contact: Contact): string {
+  const cf = (contact.customFields ?? {}) as Record<string, unknown>
+  return text
+    .replace(/\{\{first_name\}\}/g, contact.firstName ?? '')
+    .replace(/\{\{last_name\}\}/g, contact.lastName ?? '')
+    .replace(/\{\{email\}\}/g, contact.email ?? '')
+    .replace(/\{\{phone\}\}/g, contact.phone ?? '')
+    .replace(/\{\{custom\.(\w+)\}\}/g, (_, k: string) => String(cf[k] ?? ''))
+}
 
 export function startBroadcastWorker() {
   const worker = new Worker(
@@ -20,9 +31,14 @@ export function startBroadcastWorker() {
 
       let status: 'sent' | 'failed' = 'sent'
 
+      const rawContent = broadcast.content as { type: string; text?: string }
+      const resolvedContent = rawContent.text
+        ? { ...rawContent, text: resolveTemplate(rawContent.text, contact) }
+        : rawContent
+
       try {
         for (const bc of broadcast.channels) {
-          await sendChannelMessage(bc.channelId, contact, broadcast.content as never)
+          await sendChannelMessage(bc.channelId, contact, resolvedContent as never)
         }
 
         await prisma.broadcastRecipient.create({

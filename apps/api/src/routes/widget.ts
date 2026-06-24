@@ -2,12 +2,40 @@ import type { FastifyInstance } from 'fastify'
 import { prisma } from '@flashchat/database'
 import { redis } from '../lib/redis.js'
 import { randomUUID } from 'crypto'
-import { emitToWorkspace } from '../lib/socket.js'
+import { emitToWorkspace, emitToWidgetConversation } from '../lib/socket.js'
 import { startFlowExecution, resumeFlowExecution } from '../services/flow-engine.service.js'
+import { generateAiReply } from '../services/ai.service.js'
 
 async function verifyVisitorToken(token: string, conversationId: string): Promise<boolean> {
   const stored = await redis.get(`widget:token:${token}`)
   return stored === conversationId
+}
+
+async function generateWidgetAiReply(workspaceId: string, conversationId: string, userMessage: string) {
+  const workspace = await prisma.workspace.findUniqueOrThrow({ where: { id: workspaceId } })
+
+  const recentMessages = await prisma.message.findMany({
+    where: { conversationId },
+    orderBy: { sentAt: 'asc' },
+    take: 12,
+  })
+
+  const history = recentMessages
+    .map((m) => (m.content as { text?: string }).text ?? '')
+    .filter(Boolean)
+
+  const { reply } = await generateAiReply(workspaceId, workspace.aiModel, userMessage, history)
+
+  const content = { type: 'text', text: reply }
+  const msg = await prisma.message.create({
+    data: { conversationId, direction: 'outbound', content: content as object, status: 'sent' },
+  })
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { lastMessageAt: new Date() },
+  })
+  emitToWorkspace(workspaceId, 'message:new', { conversationId, message: msg })
+  emitToWidgetConversation(conversationId, 'message:receive', { content })
 }
 
 export async function widgetRoutes(app: FastifyInstance) {
@@ -71,13 +99,24 @@ export async function widgetRoutes(app: FastifyInstance) {
 
       emitToWorkspace(channel.workspaceId, 'conversation:new', { conversationId: conversation.id })
 
-      // Trigger any published flow with a first_message trigger
+      // Trigger the first published flow with an active first_message trigger for this channel.
+      // Await so activeFlowExecutionId is set before the 201 response — prevents race where
+      // the widget's doSend arrives before the flow sets activeFlowExecutionId.
       const flow = await prisma.flow.findFirst({
-        where: { workspaceId: channel.workspaceId, isPublished: true },
-        include: { triggers: { where: { triggerType: 'first_message', isActive: true } } },
+        where: {
+          workspaceId: channel.workspaceId,
+          isPublished: true,
+          triggers: {
+            some: {
+              triggerType: 'first_message',
+              isActive: true,
+              OR: [{ channelType: null }, { channelType: 'web_widget' }],
+            },
+          },
+        },
       })
-      if (flow && flow.triggers.length > 0) {
-        startFlowExecution(flow.id, contact.id, conversation.id).catch(console.error)
+      if (flow) {
+        await startFlowExecution(flow.id, contact.id, conversation.id).catch(console.error)
       }
 
       return reply.status(201).send({ data: { conversationId: conversation.id, visitorToken, externalId } })
@@ -122,11 +161,14 @@ export async function widgetRoutes(app: FastifyInstance) {
         message,
       })
 
-      // Resume flow if waiting for input
+      // Resume flow if waiting for input, otherwise fall back to AI reply
       if (conversation.activeFlowExecutionId) {
         resumeFlowExecution(conversation.activeFlowExecutionId, req.params.conversationId, req.body.text).catch(
           console.error
         )
+      } else {
+        // No active flow — generate AI reply in background
+        generateWidgetAiReply(conversation.workspaceId, req.params.conversationId, req.body.text).catch(console.error)
       }
 
       return reply.status(201).send({ data: message })

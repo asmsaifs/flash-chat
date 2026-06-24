@@ -1,19 +1,18 @@
 import { prisma } from '@flashchat/database'
 import type { Contact } from '@flashchat/database'
 import type { MessageContent } from '@flashchat/shared'
-import { emitToConversation } from '../lib/socket.js'
-
 export async function sendChannelMessage(
   channelId: string,
   contact: Contact,
-  content: MessageContent
+  content: MessageContent,
+  conversationId?: string
 ): Promise<void> {
   const channel = await prisma.channel.findUniqueOrThrow({ where: { id: channelId } })
 
   switch (channel.type) {
     case 'web_widget':
-      // Emit via Socket.io — widget is browser-side
-      emitToConversation(contact.id, 'message:receive', { content })
+      // web_widget delivery is handled by saveOutboundMessage (DB save + socket emit).
+      // Emitting here would cause duplicates for flow-engine messages.
       break
 
     case 'telegram':

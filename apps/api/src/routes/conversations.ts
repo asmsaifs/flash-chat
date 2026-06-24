@@ -3,6 +3,7 @@ import { prisma } from '@flashchat/database'
 import { PaginationQuerySchema } from '@flashchat/shared'
 import { authMiddleware, workspaceMiddleware } from '../middleware/auth.js'
 import { sendChannelMessage } from '../services/channel.service.js'
+import { generateAiReply } from '../services/ai.service.js'
 import { emitToWorkspace } from '../lib/socket.js'
 import type { MessageContent } from '@flashchat/shared'
 
@@ -97,6 +98,39 @@ export async function conversationRoutes(app: FastifyInstance) {
       emitToWorkspace(req.workspaceId, 'message:new', { conversationId: req.params.conversationId, message })
 
       return reply.status(201).send({ data: message })
+    }
+  )
+
+  // AI suggest reply
+  app.post<{ Params: { workspaceId: string; conversationId: string } }>(
+    '/workspaces/:workspaceId/conversations/:conversationId/ai-suggest',
+    { preHandler },
+    async (req, reply) => {
+      const conversation = await prisma.conversation.findFirstOrThrow({
+        where: { id: req.params.conversationId, workspaceId: req.workspaceId },
+        include: { workspace: true },
+      })
+
+      const messages = await prisma.message.findMany({
+        where: { conversationId: req.params.conversationId },
+        orderBy: { sentAt: 'desc' },
+        take: 12,
+      })
+
+      const history = messages
+        .reverse()
+        .map((m) => (m.content as { text?: string }).text ?? '')
+        .filter(Boolean)
+
+      const lastMessage = history.at(-1) ?? ''
+      const { reply: suggestion } = await generateAiReply(
+        req.workspaceId,
+        conversation.workspace.aiModel,
+        lastMessage,
+        history.slice(0, -1)
+      )
+
+      return reply.send({ data: { suggestion } })
     }
   )
 
