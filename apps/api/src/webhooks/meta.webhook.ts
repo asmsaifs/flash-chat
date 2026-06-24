@@ -122,7 +122,7 @@ export async function metaWebhookHandler(app: FastifyInstance) {
         },
         include: { workspace: true },
       }) as ChannelWithWorkspace | null
-      if (!channel) continue
+      if (!channel || !channel.isActive) continue
       await processMetaEntries(channel, [entry])
     }
     return reply.send({ ok: true })
@@ -149,7 +149,7 @@ export async function metaWebhookHandler(app: FastifyInstance) {
         where: { id: req.params.channelId },
         include: { workspace: true },
       }) as ChannelWithWorkspace | null
-      if (!channel) return reply.send({ ok: true })
+      if (!channel || !channel.isActive) return reply.send({ ok: true })
       await processMetaEntries(channel, req.body.entry)
       return reply.send({ ok: true })
     }

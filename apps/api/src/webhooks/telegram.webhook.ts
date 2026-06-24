@@ -19,6 +19,7 @@ export async function telegramWebhookHandler(app: FastifyInstance) {
 
       const channel = await prisma.channel.findUnique({ where: { id: channelId }, include: { workspace: true } })
       if (!channel) return reply.status(404).send({ ok: false })
+      if (!channel.isActive) return reply.send({ ok: true })
 
       const msg = update.message
       const cbq = update.callback_query

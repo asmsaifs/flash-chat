@@ -38,6 +38,7 @@ export function startBroadcastWorker() {
 
       try {
         for (const bc of broadcast.channels) {
+          if (!bc.channel.isActive) continue
           await sendChannelMessage(bc.channelId, contact, resolvedContent as never)
         }
 

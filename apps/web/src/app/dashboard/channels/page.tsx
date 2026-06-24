@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useApi } from '@/lib/api'
 import { useWorkspace } from '@/hooks/use-workspace'
-import { Radio, Plus, Globe, MessageCircle, Send, Instagram, Facebook, Copy, Check } from 'lucide-react'
+import { Radio, Plus, Globe, MessageCircle, Send, Instagram, Facebook, Copy, Check, Power, Trash2 } from 'lucide-react'
 import type { Channel } from '@flashchat/shared'
 import type { ChannelType } from '@flashchat/shared'
 import { MetaEmbeddedSignup } from '@/components/channels/meta-embedded-signup'
@@ -50,7 +50,7 @@ function CopyButton({ value }: { value: string }) {
   )
 }
 
-function ChannelCard({ ch }: { ch: Channel }) {
+function ChannelCard({ ch, onToggle, onDelete }: { ch: Channel; onToggle: () => void; onDelete: () => void }) {
   const appOrigin = typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'
   const wh = webhookUrl(ch.type as ChannelType, ch.id)
 
@@ -67,6 +67,22 @@ function ChannelCard({ ch }: { ch: Channel }) {
         <span className={`ml-auto text-xs px-2 py-1 rounded-full ${ch.isActive ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'}`}>
           {ch.isActive ? 'Active' : 'Inactive'}
         </span>
+        <button
+          type="button"
+          onClick={onToggle}
+          title={ch.isActive ? 'Disable channel' : 'Enable channel'}
+          className={`shrink-0 p-1.5 rounded-md transition-colors ${ch.isActive ? 'text-muted-foreground hover:text-foreground hover:bg-muted' : 'text-primary hover:bg-primary/10'}`}
+        >
+          <Power className="h-4 w-4" />
+        </button>
+        <button
+          type="button"
+          onClick={onDelete}
+          title="Delete channel"
+          className="shrink-0 p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
       </div>
 
       {ch.type === 'web_widget' && (
@@ -115,6 +131,18 @@ export default function ChannelsPage() {
     queryKey: ['channels', workspaceId],
     queryFn: () => api.get<{ data: Channel[] }>(`/workspaces/${workspaceId}/channels`, workspaceId),
     enabled: !!workspaceId,
+  })
+
+  const toggleChannel = useMutation({
+    mutationFn: (ch: Channel) =>
+      api.patch(`/workspaces/${workspaceId}/channels/${ch.id}`, { isActive: !ch.isActive }, workspaceId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['channels', workspaceId] }),
+  })
+
+  const deleteChannel = useMutation({
+    mutationFn: (channelId: string) =>
+      api.delete(`/workspaces/${workspaceId}/channels/${channelId}`, workspaceId),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['channels', workspaceId] }),
   })
 
   const createChannel = useMutation({
@@ -242,7 +270,18 @@ export default function ChannelsPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {channels.map((ch) => <ChannelCard key={ch.id} ch={ch} />)}
+          {channels.map((ch) => (
+            <ChannelCard
+              key={ch.id}
+              ch={ch}
+              onToggle={() => toggleChannel.mutate(ch)}
+              onDelete={() => {
+                if (window.confirm(`Delete channel "${ch.name}"? This cannot be undone.`)) {
+                  deleteChannel.mutate(ch.id)
+                }
+              }}
+            />
+          ))}
         </div>
       )}
     </div>
