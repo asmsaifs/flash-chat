@@ -1,5 +1,7 @@
 # FlashChat
 
+![FlashChat Banner](flashchat_banner.png)
+
 AI-powered chat marketing platform. Multi-channel inbox, visual flow builder, broadcast campaigns, and OpenRouter AI — built as a ManyChat alternative.
 
 ## Features
