@@ -14,7 +14,7 @@ export function NodePanel({ node, onUpdate, onDelete, onClose }: Props) {
   const data = node.data as Record<string, unknown>
 
   return (
-    <div className="w-80 border-l bg-card flex flex-col h-full overflow-hidden">
+    <div className="w-80 border-l bg-card flex flex-col h-full overflow-hidden pt-14">
       <div className="flex items-center justify-between px-4 py-3 border-b">
         <h3 className="font-semibold capitalize text-sm">{node.type?.replace('_', ' ')} Node</h3>
         <div className="flex items-center gap-1">

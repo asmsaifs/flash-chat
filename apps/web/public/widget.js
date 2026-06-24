@@ -224,7 +224,7 @@
     if (!text) return;
     inpEl.value = '';
     if (!state.conversationId) {
-      initSession(function () { doSend(text); connectSocket(); });
+      initSession(function () { connectSocket(); loadHistory(); doSend(text); });
     } else {
       doSend(text);
     }
@@ -237,10 +237,14 @@
     state.visitorToken = null;
     state.externalId = null;
     state.messages = [];
-    state.initialized = false;
+    state.initialized = true;
     try { localStorage.removeItem(STORAGE_KEY); } catch (_) {}
     renderMessages();
     inpEl.focus();
+    initSession(function () {
+      loadHistory();
+      connectSocket();
+    });
   }
 
   newEl.addEventListener('click', resetSession);
@@ -255,6 +259,11 @@
         if (state.conversationId) {
           loadHistory();
           connectSocket();
+        } else {
+          initSession(function () {
+            loadHistory();
+            connectSocket();
+          });
         }
       }
       setTimeout(function () { inpEl.focus(); }, 250);

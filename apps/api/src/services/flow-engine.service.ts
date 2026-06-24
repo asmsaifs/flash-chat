@@ -263,6 +263,14 @@ async function handleAiReplyNode(ctx: ExecutionContext, executionId: string, con
     return
   }
 
+  const { sentiment } = await analyzeSentiment(lastMessage, ctx.workspace.aiModel)
+  const updatedVariables = { ...ctx.variables, lastSentiment: sentiment }
+  await prisma.flowExecution.update({
+    where: { id: executionId },
+    data: { context: updatedVariables },
+  })
+  ctx.variables = updatedVariables
+
   const content: MessageContent = { type: 'text', text: reply }
   await sendChannelMessage(ctx.conversation.channelId, ctx.contact, content, conversationId)
   await saveOutboundMessage(conversationId, content)
