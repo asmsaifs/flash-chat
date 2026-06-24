@@ -10,10 +10,6 @@ AI-powered chat marketing platform. Multi-channel inbox, visual flow builder, br
 - **AI reply suggestions** — RAG-powered suggestions via OpenRouter (default: `anthropic/claude-sonnet-4-6`, swappable per workspace)
 - **Contacts** — tag filtering, CSV import, subscribe/unsubscribe, custom fields
 - **Analytics** — message volume (30-day), channel breakdown, subscriber growth
-- **Billing** — Stripe-powered subscription plans (Free / Pro / Business / Agency) with usage limits
-- **Team management** — invite members by email (Clerk), role-based access (owner / admin / agent), agent assignment + conversation snooze
-- **API keys** — SHA-256 hashed, scoped per workspace
-- **Super admin panel** — platform-wide stats, workspace management, plan overrides
 
 ## Tech Stack
 
