@@ -7,6 +7,7 @@ import { useWorkspace } from '@/hooks/use-workspace'
 import { Radio, Plus, Globe, MessageCircle, Send, Instagram, Facebook, Copy, Check } from 'lucide-react'
 import type { Channel } from '@flashchat/shared'
 import type { ChannelType } from '@flashchat/shared'
+import { MetaEmbeddedSignup } from '@/components/channels/meta-embedded-signup'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
@@ -24,22 +25,9 @@ const CHANNEL_CRED_FIELDS: Partial<Record<ChannelType, CredentialFields>> = {
   telegram: {
     botToken: { label: 'Bot Token', placeholder: '123456:ABCdef...', secret: true },
   },
-  whatsapp: {
-    phoneNumberId: { label: 'Phone Number ID', placeholder: '1234567890' },
-    accessToken: { label: 'Access Token', placeholder: 'EAABwzL...', secret: true },
-    verifyToken: { label: 'Verify Token', placeholder: 'my-secret-verify-token' },
-  },
-  messenger: {
-    pageId: { label: 'Page ID', placeholder: '1234567890' },
-    pageAccessToken: { label: 'Page Access Token', placeholder: 'EAABwzL...', secret: true },
-    verifyToken: { label: 'Verify Token', placeholder: 'my-secret-verify-token' },
-  },
-  instagram: {
-    pageId: { label: 'Page ID', placeholder: '1234567890' },
-    pageAccessToken: { label: 'Page Access Token', placeholder: 'EAABwzL...', secret: true },
-    verifyToken: { label: 'Verify Token', placeholder: 'my-secret-verify-token' },
-  },
 }
+
+const META_CHANNEL_TYPES: ChannelType[] = ['messenger', 'whatsapp', 'instagram']
 
 function webhookUrl(type: ChannelType, channelId: string): string | null {
   switch (type) {
@@ -166,66 +154,79 @@ export default function ChannelsPage() {
       {showForm && (
         <div className="rounded-xl border bg-card p-5 space-y-4">
           <h3 className="font-semibold">Connect New Channel</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Channel Type</label>
-              <select
-                aria-label="Channel Type"
-                value={channelType}
-                onChange={(e) => { setChannelType(e.target.value as ChannelType); setCredValues({}) }}
-                className="w-full border rounded-md px-3 py-2 text-sm bg-background"
-              >
-                <option value="web_widget">Web Widget</option>
-                <option value="whatsapp">WhatsApp</option>
-                <option value="telegram">Telegram</option>
-                <option value="messenger">Facebook Messenger</option>
-                <option value="instagram">Instagram DM</option>
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">Name</label>
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="My WhatsApp"
-                className="w-full border rounded-md px-3 py-2 text-sm bg-background"
-              />
-            </div>
-          </div>
 
-          {credFields && (
-            <div className="space-y-3">
-              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Credentials</p>
-              {Object.entries(credFields).map(([key, field]) => (
-                <div key={key}>
-                  <label className="text-xs font-medium text-muted-foreground mb-1 block">{field.label}</label>
-                  <input
-                    type={field.secret ? 'password' : 'text'}
-                    value={credValues[key] ?? ''}
-                    onChange={(e) => setCredValues((v) => ({ ...v, [key]: e.target.value }))}
-                    placeholder={field.placeholder}
-                    className="w-full border rounded-md px-3 py-2 text-sm bg-background font-mono"
-                  />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {channelType === 'web_widget' && (
-            <p className="text-xs text-muted-foreground">No credentials needed — the embed code will appear after creation.</p>
-          )}
-
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => createChannel.mutate()}
-              disabled={createChannel.isPending || !name}
-              className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50"
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">Channel Type</label>
+            <select
+              aria-label="Channel Type"
+              value={channelType}
+              onChange={(e) => { setChannelType(e.target.value as ChannelType); setCredValues({}) }}
+              className="w-full border rounded-md px-3 py-2 text-sm bg-background"
             >
-              {createChannel.isPending ? 'Connecting…' : 'Connect'}
-            </button>
-            <button type="button" onClick={() => setShowForm(false)} className="border px-4 py-2 rounded-md text-sm">Cancel</button>
+              <option value="web_widget">Web Widget</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="telegram">Telegram</option>
+              <option value="messenger">Facebook Messenger</option>
+              <option value="instagram">Instagram DM</option>
+            </select>
           </div>
+
+          {META_CHANNEL_TYPES.includes(channelType) ? (
+            <MetaEmbeddedSignup
+              channelType={channelType as 'messenger' | 'whatsapp' | 'instagram'}
+              onSuccess={() => {
+                qc.invalidateQueries({ queryKey: ['channels', workspaceId] })
+                setShowForm(false)
+              }}
+              onCancel={() => setShowForm(false)}
+            />
+          ) : (
+            <>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">Name</label>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="My Channel"
+                  className="w-full border rounded-md px-3 py-2 text-sm bg-background"
+                />
+              </div>
+
+              {credFields && (
+                <div className="space-y-3">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Credentials</p>
+                  {Object.entries(credFields).map(([key, field]) => (
+                    <div key={key}>
+                      <label className="text-xs font-medium text-muted-foreground mb-1 block">{field.label}</label>
+                      <input
+                        type={field.secret ? 'password' : 'text'}
+                        value={credValues[key] ?? ''}
+                        onChange={(e) => setCredValues((v) => ({ ...v, [key]: e.target.value }))}
+                        placeholder={field.placeholder}
+                        className="w-full border rounded-md px-3 py-2 text-sm bg-background font-mono"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {channelType === 'web_widget' && (
+                <p className="text-xs text-muted-foreground">No credentials needed — the embed code will appear after creation.</p>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => createChannel.mutate()}
+                  disabled={createChannel.isPending || !name}
+                  className="bg-primary text-primary-foreground px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50"
+                >
+                  {createChannel.isPending ? 'Connecting…' : 'Connect'}
+                </button>
+                <button type="button" onClick={() => setShowForm(false)} className="border px-4 py-2 rounded-md text-sm">Cancel</button>
+              </div>
+            </>
+          )}
         </div>
       )}
 

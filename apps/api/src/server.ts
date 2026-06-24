@@ -16,6 +16,7 @@ import { broadcastRoutes } from './routes/broadcasts.js'
 import { knowledgeBaseRoutes } from './routes/knowledge-base.js'
 import { analyticsRoutes } from './routes/analytics.js'
 import { widgetRoutes } from './routes/widget.js'
+import { metaOAuthRoutes } from './routes/meta-oauth.js'
 
 // Webhooks
 import { telegramWebhookHandler } from './webhooks/telegram.webhook.js'
@@ -112,6 +113,7 @@ async function bootstrap() {
   await app.register(broadcastRoutes)
   await app.register(knowledgeBaseRoutes)
   await app.register(analyticsRoutes)
+  await app.register(metaOAuthRoutes)
 
   // Widget routes (public — no auth middleware, auth via visitor token in Redis)
   await app.register(widgetRoutes)
