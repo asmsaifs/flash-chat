@@ -113,4 +113,14 @@ export async function workspaceRoutes(app: FastifyInstance) {
       return reply.status(201).send({ data: member })
     }
   )
+
+  // Remove member
+  app.delete<{ Params: { workspaceId: string; memberId: string } }>(
+    '/workspaces/:workspaceId/members/:memberId',
+    { preHandler: [authMiddleware, workspaceMiddleware] },
+    async (req, reply) => {
+      await prisma.workspaceMember.delete({ where: { id: req.params.memberId } })
+      return reply.status(204).send()
+    }
+  )
 }

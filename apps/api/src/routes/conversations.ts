@@ -5,6 +5,7 @@ import { authMiddleware, workspaceMiddleware } from '../middleware/auth.js'
 import { sendChannelMessage } from '../services/channel.service.js'
 import { generateAiReply } from '../services/ai.service.js'
 import { emitToWorkspace } from '../lib/socket.js'
+import { checkAiReplyLimit } from '../middleware/plan-limits.js'
 import type { MessageContent } from '@flashchat/shared'
 
 export async function conversationRoutes(app: FastifyInstance) {
@@ -106,6 +107,11 @@ export async function conversationRoutes(app: FastifyInstance) {
     '/workspaces/:workspaceId/conversations/:conversationId/ai-suggest',
     { preHandler },
     async (req, reply) => {
+      const limitCheck = await checkAiReplyLimit(req.workspaceId)
+      if (!limitCheck.allowed) {
+        return reply.status(402).send({ error: 'Plan limit reached', message: `AI reply limit (${limitCheck.limit}/month) reached. Upgrade your plan.`, statusCode: 402 })
+      }
+
       const conversation = await prisma.conversation.findFirstOrThrow({
         where: { id: req.params.conversationId, workspaceId: req.workspaceId },
         include: { workspace: true },

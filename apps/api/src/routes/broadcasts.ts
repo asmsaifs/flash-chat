@@ -4,6 +4,7 @@ import { CreateBroadcastSchema } from '@flashchat/shared'
 import { authMiddleware, workspaceMiddleware } from '../middleware/auth.js'
 import { Queue } from 'bullmq'
 import { redis } from '../lib/redis.js'
+import { checkBroadcastLimit } from '../middleware/plan-limits.js'
 
 const broadcastQueue = new Queue('broadcast', { connection: redis as never })
 
@@ -29,6 +30,11 @@ export async function broadcastRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const body = CreateBroadcastSchema.safeParse(req.body)
       if (!body.success) return reply.status(400).send({ error: 'Validation', message: body.error.message, statusCode: 400 })
+
+      const limitCheck = await checkBroadcastLimit(req.workspaceId)
+      if (!limitCheck.allowed) {
+        return reply.status(402).send({ error: 'Plan limit reached', message: `Broadcast limit (${limitCheck.limit}/month) reached. Upgrade your plan.`, statusCode: 402 })
+      }
 
       const { channelIds, ...rest } = body.data
 

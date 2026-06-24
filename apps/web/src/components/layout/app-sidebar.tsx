@@ -17,6 +17,7 @@ import {
   Brain,
   Settings,
   Zap,
+  CreditCard,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -29,6 +30,7 @@ const navItems = [
   { href: '/dashboard/analytics', label: 'Analytics', icon: BarChart3 },
   { href: '/dashboard/channels', label: 'Channels', icon: Radio },
   { href: '/dashboard/knowledge-base', label: 'AI Knowledge', icon: Brain },
+  { href: '/dashboard/billing', label: 'Billing', icon: CreditCard },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ]
 

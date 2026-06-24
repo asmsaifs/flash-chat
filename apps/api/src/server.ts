@@ -17,12 +17,15 @@ import { knowledgeBaseRoutes } from './routes/knowledge-base.js'
 import { analyticsRoutes } from './routes/analytics.js'
 import { widgetRoutes } from './routes/widget.js'
 import { metaOAuthRoutes } from './routes/meta-oauth.js'
+import { billingRoutes } from './routes/billing.js'
+import { apiKeyRoutes } from './routes/api-keys.js'
 
 // Webhooks
 import { telegramWebhookHandler } from './webhooks/telegram.webhook.js'
 import { metaWebhookHandler } from './webhooks/meta.webhook.js'
 import { whatsappWebhookHandler } from './webhooks/whatsapp.webhook.js'
 import { clerkWebhookHandler } from './webhooks/clerk.webhook.js'
+import { stripeWebhookHandler } from './webhooks/stripe.webhook.js'
 
 // Workers
 import { startBroadcastWorker } from './workers/broadcast.worker.js'
@@ -114,6 +117,8 @@ async function bootstrap() {
   await app.register(knowledgeBaseRoutes)
   await app.register(analyticsRoutes)
   await app.register(metaOAuthRoutes)
+  await app.register(billingRoutes)
+  await app.register(apiKeyRoutes)
 
   // Widget routes (public — no auth middleware, auth via visitor token in Redis)
   await app.register(widgetRoutes)
@@ -123,6 +128,7 @@ async function bootstrap() {
   await app.register(metaWebhookHandler)
   await app.register(whatsappWebhookHandler)
   await app.register(clerkWebhookHandler)
+  await app.register(stripeWebhookHandler)
 
   // Start workers
   startBroadcastWorker()

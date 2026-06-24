@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify'
 import { prisma } from '@flashchat/database'
 import { CreateContactSchema, PaginationQuerySchema } from '@flashchat/shared'
 import { authMiddleware, workspaceMiddleware } from '../middleware/auth.js'
+import { checkSubscriberLimit } from '../middleware/plan-limits.js'
 
 export async function contactRoutes(app: FastifyInstance) {
   const preHandler = [authMiddleware, workspaceMiddleware]
@@ -63,6 +64,11 @@ export async function contactRoutes(app: FastifyInstance) {
     async (req, reply) => {
       const body = CreateContactSchema.safeParse(req.body)
       if (!body.success) return reply.status(400).send({ error: 'Validation', message: body.error.message, statusCode: 400 })
+
+      const limitCheck = await checkSubscriberLimit(req.workspaceId)
+      if (!limitCheck.allowed) {
+        return reply.status(402).send({ error: 'Plan limit reached', message: `Subscriber limit (${limitCheck.limit}) reached. Upgrade your plan.`, statusCode: 402 })
+      }
 
       const { tags, ...rest } = body.data
       const contact = await prisma.contact.create({
