@@ -29,6 +29,18 @@ async function subscribeWabaToApp(wabaId: string, userAccessToken: string) {
   )
 }
 
+async function validateTelegramBot(botToken: string): Promise<{ id: number; username: string; first_name: string }> {
+  const res = await axios.get(`https://api.telegram.org/bot${botToken}/getMe`)
+  if (!res.data.ok) throw new Error('Invalid bot token')
+  return res.data.result
+}
+
+async function setTelegramWebhook(botToken: string, channelId: string) {
+  const url = `${process.env.API_URL}/webhook/telegram/${channelId}`
+  const res = await axios.post(`https://api.telegram.org/bot${botToken}/setWebhook`, { url })
+  if (!res.data.ok) throw new Error(res.data.description ?? 'setWebhook failed')
+}
+
 async function ensureAppSubscription(object: 'page' | 'whatsapp_business_account', webhookPath: string, fields: string) {
   const callbackUrl = `${process.env.API_URL}${webhookPath}`
   const verifyToken = process.env.FACEBOOK_WEBHOOK_VERIFY_TOKEN
@@ -103,6 +115,18 @@ export async function channelRoutes(app: FastifyInstance) {
           })
         if (subscriptionErrors.length) {
           return reply.status(201).send({ data: channel, warnings: subscriptionErrors })
+        }
+      } else if (body.data.type === 'telegram' && creds.botToken) {
+        const warnings: string[] = []
+        await validateTelegramBot(creds.botToken)
+          .then(() => setTelegramWebhook(creds.botToken, channel.id))
+          .catch((err) => {
+            const msg = axios.isAxiosError(err) ? (err.response?.data?.description ?? err.message) : String(err)
+            warnings.push(`Webhook registration: ${msg}`)
+            req.log.warn({ err }, 'Failed to configure telegram webhook')
+          })
+        if (warnings.length) {
+          return reply.status(201).send({ data: channel, warnings })
         }
       }
 

@@ -8,6 +8,7 @@ import { Radio, Plus, Globe, MessageCircle, Send, Instagram, Facebook, Copy, Che
 import type { Channel } from '@flashchat/shared'
 import type { ChannelType } from '@flashchat/shared'
 import { MetaEmbeddedSignup } from '@/components/channels/meta-embedded-signup'
+import { TelegramSignup } from '@/components/channels/telegram-signup'
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:4000'
 
@@ -21,11 +22,7 @@ const channelIcons: Record<ChannelType, React.ReactNode> = {
 
 type CredentialFields = Record<string, { label: string; placeholder: string; secret?: boolean }>
 
-const CHANNEL_CRED_FIELDS: Partial<Record<ChannelType, CredentialFields>> = {
-  telegram: {
-    botToken: { label: 'Bot Token', placeholder: '123456:ABCdef...', secret: true },
-  },
-}
+const CHANNEL_CRED_FIELDS: Partial<Record<ChannelType, CredentialFields>> = {}
 
 const META_CHANNEL_TYPES: ChannelType[] = ['messenger', 'whatsapp', 'instagram']
 
@@ -91,7 +88,7 @@ function ChannelCard({ ch }: { ch: Channel }) {
           </div>
           {(ch.type === 'telegram') && (
             <p className="text-xs text-muted-foreground mt-1">
-              Set this URL via Telegram&apos;s setWebhook API or BotFather.
+              Webhook registered automatically on connect.
             </p>
           )}
           {(ch.type === 'whatsapp' || ch.type === 'messenger' || ch.type === 'instagram') && (
@@ -171,7 +168,15 @@ export default function ChannelsPage() {
             </select>
           </div>
 
-          {META_CHANNEL_TYPES.includes(channelType) ? (
+          {channelType === 'telegram' ? (
+            <TelegramSignup
+              onSuccess={() => {
+                qc.invalidateQueries({ queryKey: ['channels', workspaceId] })
+                setShowForm(false)
+              }}
+              onCancel={() => setShowForm(false)}
+            />
+          ) : META_CHANNEL_TYPES.includes(channelType) ? (
             <MetaEmbeddedSignup
               channelType={channelType as 'messenger' | 'whatsapp' | 'instagram'}
               onSuccess={() => {

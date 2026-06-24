@@ -8,8 +8,20 @@ import type { Channel } from '@prisma/client'
 
 type ChannelWithWorkspace = Channel & { workspace: { aiModel: string } }
 
+async function fetchMetaUserName(senderId: string, pageAccessToken: string): Promise<{ firstName?: string; lastName?: string }> {
+  try {
+    const res = await fetch(`https://graph.facebook.com/${senderId}?fields=first_name,last_name&access_token=${pageAccessToken}`)
+    if (!res.ok) return {}
+    const data = await res.json() as { first_name?: string; last_name?: string }
+    return { firstName: data.first_name, lastName: data.last_name }
+  } catch {
+    return {}
+  }
+}
+
 async function processMetaEntries(channel: ChannelWithWorkspace, entries: MetaWebhookPayload['entry']) {
   const channelId = channel.id
+  const creds = channel.credentials as { pageAccessToken?: string }
   for (const entry of entries ?? []) {
     for (const messaging of entry.messaging ?? []) {
       const senderId = messaging.sender.id
@@ -17,10 +29,20 @@ async function processMetaEntries(channel: ChannelWithWorkspace, entries: MetaWe
 
       if (!text) continue
 
+      const existing = await prisma.contact.findUnique({
+        where: { workspaceId_externalId_channelType: { workspaceId: channel.workspaceId, externalId: senderId, channelType: channel.type as ChannelType } },
+        select: { id: true, firstName: true },
+      })
+
+      let nameData: { firstName?: string; lastName?: string } = {}
+      if (!existing?.firstName && creds.pageAccessToken) {
+        nameData = await fetchMetaUserName(senderId, creds.pageAccessToken)
+      }
+
       const contact = await prisma.contact.upsert({
         where: { workspaceId_externalId_channelType: { workspaceId: channel.workspaceId, externalId: senderId, channelType: channel.type as ChannelType } },
-        update: { lastSeenAt: new Date() },
-        create: { workspaceId: channel.workspaceId, externalId: senderId, channelType: channel.type as ChannelType },
+        update: { lastSeenAt: new Date(), ...(nameData.firstName && { firstName: nameData.firstName }), ...(nameData.lastName && { lastName: nameData.lastName }) },
+        create: { workspaceId: channel.workspaceId, externalId: senderId, channelType: channel.type as ChannelType, ...nameData },
       })
 
       let conversation = await prisma.conversation.findFirst({

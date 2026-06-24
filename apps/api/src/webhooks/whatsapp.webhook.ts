@@ -20,6 +20,7 @@ type ChangeValue = {
       list_reply?: { id: string; title: string }
     }
   }>
+  contacts?: Array<{ profile: { name: string }; wa_id: string }>
   statuses?: Array<{ id: string; status: string; timestamp: string; recipient_id: string }>
 }
 
@@ -30,10 +31,14 @@ async function processWhatsAppChange(channel: ChannelWithWorkspace, changes: Cha
 
     if (!text) continue
 
+    const profileName = changes.contacts?.find(c => c.wa_id === from)?.profile.name
+    const [firstName, ...rest] = profileName ? profileName.split(' ') : []
+    const lastName = rest.length > 0 ? rest.join(' ') : undefined
+
     const contact = await prisma.contact.upsert({
       where: { workspaceId_externalId_channelType: { workspaceId: channel.workspaceId, externalId: from, channelType: 'whatsapp' } },
-      update: { lastSeenAt: new Date(), phone: `+${from}` },
-      create: { workspaceId: channel.workspaceId, externalId: from, channelType: 'whatsapp', phone: `+${from}` },
+      update: { lastSeenAt: new Date(), phone: `+${from}`, ...(firstName && { firstName }), ...(lastName && { lastName }) },
+      create: { workspaceId: channel.workspaceId, externalId: from, channelType: 'whatsapp', phone: `+${from}`, firstName, lastName },
     })
 
     let conversation = await prisma.conversation.findFirst({
